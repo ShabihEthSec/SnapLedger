@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import OcrProcessor from "./OcrProcessor";
 import ConfirmExpense from "./ConfirmExpense";
 import { extractExpenseData, type ExtractedData } from "@/lib/extractor";
+import { generateExpenseProof } from "@/lib/proof";
+import { sendProofToSolana } from "@/lib/solana";
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
@@ -115,9 +117,27 @@ export default function Home() {
         {extracted && !confirmed && (
           <ConfirmExpense
             extracted={extracted}
-            onConfirm={(data) => {
-              console.log("Confirmed:", data);
-              setConfirmed(data);
+            onConfirm={async (data) => {
+              try {
+                const proof = generateExpenseProof(data);
+
+                // ⛓️ Send to Solana
+                const solanaResult = await sendProofToSolana(proof.hash);
+
+                const final = {
+                  ...data,
+                  hash: proof.hash,
+                  proofString: `${proof.normalized}|${proof.hash}`,
+                  txSignature: solanaResult.signature,
+                  explorerUrl: solanaResult.explorerUrl,
+                };
+
+                console.log("Final Proof:", final);
+
+                setConfirmed(final);
+              } catch (err: any) {
+                setError(err.message);
+              }
             }}
             onRetake={handleRetake}
           />
@@ -125,11 +145,26 @@ export default function Home() {
 
         {/* ✅ Final State */}
         {confirmed && (
-          <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-xl text-green-300">
-            <h2 className="font-semibold mb-2">✅ Expense Saved</h2>
-            <pre className="text-xs whitespace-pre-wrap">
-              {JSON.stringify(confirmed, null, 2)}
-            </pre>
+          <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-xl text-green-300 space-y-3">
+            <h2 className="font-semibold">✅ Expense Proof Anchored</h2>
+
+            <div className="text-xs break-all">
+              <strong>Hash:</strong>
+              <div>{confirmed.hash}</div>
+            </div>
+
+            <div className="text-xs break-all">
+              <strong>Tx Signature:</strong>
+              <div>{confirmed.txSignature}</div>
+            </div>
+
+            <a
+              href={confirmed.explorerUrl}
+              target="_blank"
+              className="text-blue-400 underline text-sm"
+            >
+              View on Solana Explorer
+            </a>
           </div>
         )}
       </div>
