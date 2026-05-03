@@ -8,8 +8,18 @@ export interface ExtractedData {
   rawText: string;
 }
 
+function cleanText(text: string): string {
+  return text
+    .replace(/[^\x20-\x7E\n]/g, "") // remove weird OCR chars
+    .replace(/\s+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .trim();
+}
+
 export function extractExpenseData(ocrText: string): ExtractedData {
-  const lines = ocrText
+  const cleaned = cleanText(ocrText);
+
+  const lines = cleaned
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
@@ -31,7 +41,7 @@ export function extractExpenseData(ocrText: string): ExtractedData {
     amount: amountResult.value,
     date,
     confidence: overallConfidence,
-    rawText: ocrText,
+    rawText: cleaned,
   };
 }
 
@@ -43,11 +53,11 @@ function extractAmount(lines: string[]): {
 } {
   // Strategy 1: explicit total marker
   const totalRegex =
-    /(?:total|amount|sum|grand\s*total|net\s*payable|rs\.?|₹)\s*[:\s]*(\d+(?:[.,]\d{1,2})?)/i;
+    /(total|grand\s*total|amount)\s*[:\s\-]*\$?\s*(\d+(?:[.,]\d{2}))/i;
   for (const line of lines) {
     const match = line.match(totalRegex);
     if (match) {
-      const num = parseAmountString(match[1]);
+      const num = parseAmountString(match[2]);
       if (num !== null) return { value: num, confidence: "high" };
     }
   }
@@ -59,7 +69,8 @@ function extractAmount(lines: string[]): {
       return m ? parseFloat(m[1]) : null;
     })
     .filter((n): n is number => n !== null)
-    .sort((a, b) => b - a);
+    .sort((a, b) => b - a)
+    .filter((n) => n < 100000); // avoid garbage huge numbers
 
   if (priceCandidates.length > 0) {
     const confidence = priceCandidates.length === 1 ? "high" : "medium";
@@ -81,71 +92,46 @@ function parseAmountString(raw: string): number | null {
   const parsed = parseFloat(clean);
   return isNaN(parsed) ? null : parsed;
 }
-
 function extractMerchant(lines: string[]): {
   value: string;
   confidence: "high" | "medium" | "low";
 } {
-  const knownMerchants = [
-    "starbucks",
-    "zomato",
-    "swiggy",
-    "uber",
-    "ola",
-    "dmart",
-    "bigbasket",
-    "amazon",
-    "flipkart",
-    "domino",
-    "pizza hut",
-    "mcdonalds",
-    "burger king",
-    "licious",
-    "zepto",
-    "blinkit",
-    "medplus",
-    "apollo",
-    "titan",
-    "bata",
-    "croma",
-    "reliance",
-    "more",
-    "spencer",
-    "nilgiris",
+  const blacklist = [
+    "receipt",
+    "invoice",
+    "tax",
+    "total",
+    "amount",
+    "thank",
+    "payment",
+    "cash",
+    "card",
+    "auth",
+    "terminal",
   ];
 
-  // Look for known merchant in lines (case-insensitive)
   for (const line of lines) {
     const lower = line.toLowerCase();
-    if (knownMerchants.some((m) => lower.includes(m))) {
-      return { value: line.trim(), confidence: "high" };
-    }
-  }
 
-  // Take first non-numeric, non-date line with sufficient length
-  const nameLines = lines.filter((line) => {
-    const cleaned = line.replace(/[^a-zA-Z0-9\s]/g, "").trim();
-    return (
-      cleaned.length > 3 &&
-      !/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(cleaned) &&
-      !/^\d+(\.\d+)?$/.test(cleaned)
-    );
-  });
+    // ❌ Skip junk lines
+    if (blacklist.some((b) => lower.includes(b))) continue;
 
-  if (nameLines.length > 0) {
-    const candidate = nameLines[0].replace(/\s{2,}/g, " ").trim();
+    // ❌ Skip numeric-heavy lines
+    if ((line.match(/\d/g) || []).length > line.length / 2) continue;
+
+    // ❌ Skip very short lines
+    if (line.length < 4) continue;
+
     return {
-      value: candidate,
-      confidence: nameLines.length === 1 ? "high" : "medium",
+      value: line.replace(/\s{2,}/g, " ").trim(),
+      confidence: "medium",
     };
   }
 
-  // Ultimate fallback: first line
-  if (lines.length > 0) {
-    return { value: lines[0], confidence: "low" };
-  }
-
-  return { value: "Unknown Merchant", confidence: "low" };
+  return {
+    value: lines[0] || "Unknown Merchant",
+    confidence: "low",
+  };
 }
 function extractDate(text: string): string | null {
   // Strategy 1: explicit date-like patterns only (DD-MM-YYYY or MM-DD-YYYY)

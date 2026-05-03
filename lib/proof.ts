@@ -21,10 +21,14 @@ export function generateExpenseProof(data: {
 }) {
   const normalized = normalizeExpense(data);
 
-  const hash = sha256(normalized);
+  const hash = hashNormalizedExpense(normalized);
 
   return {
     hash,
     normalized,
   };
+}
+
+export function hashNormalizedExpense(normalized: string) {
+  return sha256(normalized);
 }

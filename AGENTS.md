@@ -1,5 +1,28 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Solana Development Rules
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+## Stack
+
+- Anchor for programs
+- @solana/kit for client
+- Codama for IDL
+
+## Constraints
+
+- Always use PDAs
+- Validate all accounts
+- Avoid unsafe deserialization
+
+## Testing
+
+- Unit: LiteSVM / Mollusk
+- Integration: Surfpool
+
+## Security
+
+- Prevent reentrancy
+- Check signer + ownership
+- Avoid unchecked accounts
+
+## Compatibility
+
+- Ensure Anchor + Solana CLI versions match
