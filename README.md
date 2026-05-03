@@ -2,7 +2,7 @@
 
 > Don’t track expenses. Prove them.
 
-SnapLedger is a mobile-first expense proof system for crypto freelancers. It allows users to capture receipts, extract data offline, and generate tamper-evident proofs anchored on Solana.
+SnapLedger is a mobile-first, verifiable expense proof system for crypto freelancers. It allows users to capture receipts, extract data locally, generate deterministic proofs, and anchor them on Solana for independent verification.
 
 ---
 
@@ -10,8 +10,8 @@ SnapLedger is a mobile-first expense proof system for crypto freelancers. It all
 
 Freelancers paid in USDC/USDT (especially in India, SEA, LatAm) face a major issue:
 
-- Expenses are tracked using spreadsheets or screenshots
-- Receipts are easy to manipulate
+- Expenses are tracked via spreadsheets or screenshots
+- Receipts can be easily manipulated
 - No reliable way to **prove authenticity** during audits or reimbursements
 - Heavy dependence on trust (client, accountant, or platform)
 
@@ -19,112 +19,146 @@ Freelancers paid in USDC/USDT (especially in India, SEA, LatAm) face a major iss
 
 ## 💡 Solution
 
-SnapLedger replaces trust with **cryptographic proof**.
+SnapLedger replaces trust with **cryptographic verification**.
 
-Users can:
+Instead of storing receipts, SnapLedger generates **tamper-evident proofs**:
 
 1. 📸 Capture a receipt
-2. 🤖 Extract data locally (offline OCR)
-3. 🧠 Automatically detect merchant, amount, date
-4. ✏️ Confirm or edit details
-5. 🔐 (Next phase) Generate a tamper-proof hash
-6. ⛓️ Anchor proof on Solana
-7. 📤 Share verifiable proof with anyone
+2. 🤖 Extract data locally (OCR)
+3. 🧠 Detect merchant, amount, date
+4. ✏️ User confirms or edits
+5. 🔐 Generate deterministic proof (SHA-256 hash)
+6. ⛓️ Anchor hash on Solana (SPL Memo)
+7. 🔍 Verify proof independently
 
 ---
 
-## 🧱 Current Implementation (What’s Done)
+## 🔁 End-to-End Flow
 
-### ✅ Phase 1 — OCR Pipeline
+```
 
-- Camera capture (mobile-first UI)
+Receipt → OCR → Extract → Confirm → Normalize → Hash → Solana → Verify
+
+```
+
+---
+
+## 🧱 What’s Implemented
+
+### ✅ OCR Pipeline
+
+- Mobile-first camera capture
 - OCR using `tesseract.js`
-- Fully client-side (no API calls)
+- Fully client-side (no backend)
 
-### ✅ Phase 2 — Intelligent Extraction
+### ✅ Intelligent Extraction
 
 - Amount detection (multi-strategy)
-- Merchant extraction (header filtering + heuristics)
-- Date extraction (multi-match + validation)
-- Confidence scoring system
+- Merchant filtering + heuristics
+- Date parsing (multi-match + validation)
+- Confidence scoring
 
-### ✅ Phase 3 — Human-in-the-loop UX
+### ✅ Human-in-the-loop UX
 
 - Editable confirmation screen
-- Category tagging
 - Error handling + confidence warnings
 
-### ✅ Working Flow
+### ✅ Proof Generation
+
+- Deterministic normalization:
 
 ```
 
-Image → OCR → Extract → Confirm → Save
+merchant|amount|date
 
 ```
 
+- SHA-256 hashing
+- Consistent across devices
+
+### ✅ On-Chain Anchoring (Solana)
+
+- Hash stored via SPL Memo
+- Public, immutable, permissionless
+- No centralized dependency
+
+### ✅ Verification System
+
+- Input:
+
+```
+
+normalized|hash|txSignature
+
+```
+
+- Recompute hash locally
+- Fetch transaction from Solana
+- Compare memo data
+
+✔ Detects tampering instantly
+
+### ✅ Persistence & Recovery
+
+- IndexedDB (local storage of proofs)
+- Export JSON backup (`snapledger-proofs.json`)
+- Import JSON restore
+- Deep-link verification support
+
 ---
 
-## 🧠 Key Technical Highlights
+## 🔗 Why Solana?
 
-### 1. Offline-First OCR
+SnapLedger uses Solana as a **trust anchor**, not a database.
 
-- Runs entirely in-browser
-- No data leaves the device
-- Privacy-preserving by design
+Instead of storing full data:
 
-### 2. Heuristic Extraction Engine
+- Only the **hash** is stored on-chain
+- Full data remains user-controlled
 
-- Handles noisy OCR text
-- Filters irrelevant lines (e.g., "RECEIPT", "TOTAL")
-- Uses multiple fallback strategies
+### Benefits:
 
-### 3. Robust Date Parsing
-
-- Handles ambiguous formats (DD-MM vs MM-DD)
-- Avoids JS date auto-correction bugs
-- Selects best candidate from multiple matches
-
-### 4. Confidence System
-
-- Flags uncertain extraction
-- Ensures user verification before finalization
-
----
-
-## 🔗 Why Solana? (Core Design Decision)
-
-Traditional systems rely on trust:
-
-- PDFs → editable
-- SaaS tools → require platform trust
-- DocuSign → centralized authority
-
-SnapLedger anchors expense hashes on Solana:
-
-- Public, permissionless verification
-- No intermediary required
+- Permissionless verification
+- No platform dependency
+- Low cost + high throughput
 - Tamper-evident records
-- Trust shifts from institutions → cryptography
 
 ---
 
-## 🔮 Next Steps (Planned)
+## 🧠 Architecture
 
-### ⛓️ Phase 4 — Proof Generation
+```
 
-- keccak256 hashing of expense data
-- deterministic proof string
+User Data (local / export)
+↓
+Normalized → SHA256 Hash
+↓
+Solana (immutable anchor)
 
-### 🔍 Phase 5 — Verification System
+```
 
-- paste proof → recompute hash
-- compare with on-chain record
-- detect tampering instantly
+---
 
-### 📤 Phase 6 — Sharing
+## 🧪 Example Proof
 
-- share single expense proof
-- no full ledger exposure
+```text
+starbucks|64.42|2019-03-01|3ec101...|txSignature
+```
+
+---
+
+## 🔍 Verification Logic
+
+1. Parse proof
+2. Recompute hash
+3. Compare with provided hash
+4. Fetch Solana transaction
+5. Validate memo
+
+### Result:
+
+- ✅ VALID — data matches and is anchored
+- ❌ INVALID — tampered or mismatch
 
 ---
 
@@ -133,20 +167,7 @@ SnapLedger anchors expense hashes on Solana:
 - Crypto freelancers
 - Remote contractors
 - Digital nomads
-- Anyone paid in stablecoins
-
----
-
-## 🧪 Example Output
-
-```json
-{
-  "merchant": "RECEIPT",
-  "amount": 64.42,
-  "date": "2019-03-01",
-  "category": "Other"
-}
-```
+- Anyone needing verifiable expense records
 
 ---
 
@@ -156,7 +177,8 @@ SnapLedger anchors expense hashes on Solana:
 - TypeScript
 - Tailwind CSS
 - Tesseract.js (OCR)
-- (Upcoming) Solana Web3.js
+- Solana Web3.js (SPL Memo)
+- IndexedDB (local persistence)
 
 ---
 
@@ -175,17 +197,19 @@ Open: [http://localhost:3000](http://localhost:3000)
 ## ⚠️ Known Limitations
 
 - OCR accuracy depends on image quality
-- Merchant detection is heuristic-based (not perfect)
-- Date format ambiguity handled with assumptions
-- On-chain proof not yet integrated (planned next)
+- Merchant detection is heuristic-based
+- Requires internet for on-chain verification
+- Devnet may have RPC / airdrop instability
 
 ---
 
-## 🧠 Key Insight
+## 🧨 Key Insight
 
-SnapLedger is not just an expense tracker.
+SnapLedger is not an expense tracker.
 
-It is a **proof system for financial records**.
+It is a:
+
+> **Deterministic, verifiable, tamper-evident financial proof system**
 
 ---
 
@@ -197,13 +221,12 @@ Focus:
 
 - Real-world problem
 - Offline-first design
+- Trust minimization
 - Verifiable data
-- Simple, demo-ready UX
+- Demo-ready UX
 
 ---
 
 ## 👤 Author
 
 Mohd Shabihul Hasan Khan (ShabihEthSec)
-
----

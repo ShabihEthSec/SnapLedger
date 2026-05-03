@@ -6,12 +6,7 @@ import ConfirmExpense from "./ConfirmExpense";
 import { extractExpenseData } from "@/lib/extractor";
 import { generateExpenseProof } from "@/lib/proof";
 import { sendProofToSolana } from "@/lib/solana";
-import {
-  bulkInsertProofs,
-  getAllProofs,
-  saveProof,
-  type StoredProof,
-} from "@/lib/db";
+import { getAllProofs, saveProof, type StoredProof } from "@/lib/db";
 
 type ConfirmedExpense = {
   merchant: string;
@@ -32,10 +27,12 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const [confirmed, setConfirmed] = useState<ConfirmedExpense | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
   const [storedProofs, setStoredProofs] = useState<StoredProof[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
 
   async function refreshProofs() {
     const proofs = await getAllProofs();
@@ -56,47 +53,56 @@ export default function Home() {
     };
   }, []);
 
-  async function handleExportProofs() {
-    const proofs = await getAllProofs();
-    const blob = new Blob([JSON.stringify(proofs, null, 2)], {
+  function getProofFileName(proof: ConfirmedExpense) {
+    const merchant = proof.merchant
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+    const date = proof.date.trim().replace(/[^a-z0-9-]+/gi, "-");
+
+    return `${merchant || "merchant"}-${date || "date"}.json`;
+  }
+
+  function handleExportProof(proof: ConfirmedExpense) {
+    const exportProof = {
+      merchant: proof.merchant,
+      amount: proof.amount.toFixed(2),
+      date: proof.date,
+      hash: proof.hash,
+      tx: proof.txSignature,
+    };
+    const blob = new Blob([JSON.stringify(exportProof, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = "snapledger-proofs.json";
+    link.download = getProofFileName(proof);
     link.click();
 
     URL.revokeObjectURL(url);
   }
 
-  async function handleImportProofs(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  async function handleCopyProof(proofString: string) {
     try {
-      const parsed = JSON.parse(await file.text());
-
-      if (!Array.isArray(parsed)) {
-        setError("Invalid proofs JSON");
-        return;
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(proofString);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = proofString;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
       }
 
-      await bulkInsertProofs(
-        parsed.filter(
-          (proof) =>
-            proof &&
-            typeof proof.hash === "string" &&
-            typeof proof.txSignature === "string",
-        ),
-      );
-      await refreshProofs();
-      setError(null);
+      setCopyStatus("copied");
     } catch {
-      setError("Failed to import proofs JSON");
-    } finally {
-      event.target.value = "";
+      setCopyStatus("failed");
     }
   }
 
@@ -107,6 +113,7 @@ export default function Home() {
       setError(null);
       setOcrText("");
       setConfirmed(null);
+      setCopyStatus("idle");
 
       const url = URL.createObjectURL(file);
       setImage(url);
@@ -118,6 +125,7 @@ export default function Home() {
     setImage(null);
     setOcrText("");
     setConfirmed(null);
+    setCopyStatus("idle");
     setError(null);
     fileInputRef.current?.click();
   };
@@ -155,14 +163,6 @@ export default function Home() {
           capture="environment"
           ref={fileInputRef}
           onChange={handleCapture}
-          className="hidden"
-        />
-
-        <input
-          type="file"
-          accept="application/json"
-          ref={importInputRef}
-          onChange={handleImportProofs}
           className="hidden"
         />
 
@@ -217,24 +217,45 @@ export default function Home() {
               try {
                 const proof = generateExpenseProof(data);
 
+                if (!proof.ok) {
+                  setError(proof.error.message);
+                  return;
+                }
+
                 // ⛓️ Send to Solana
                 const solanaResult = await sendProofToSolana(proof.hash);
+                const anchoredProof = generateExpenseProof(
+                  {
+                    merchant: proof.normalized.merchant,
+                    amount: proof.normalized.amount,
+                    date: proof.normalized.date,
+                  },
+                  solanaResult.signature,
+                );
+
+                if (!anchoredProof.ok) {
+                  setError(anchoredProof.error.message);
+                  return;
+                }
 
                 const finalProof = {
-                  merchant: data.merchant,
-                  amount: data.amount,
-                  date: data.date,
-                  normalized: proof.normalized,
+                  merchant: proof.normalized.merchant,
+                  amount: Number(proof.normalized.amount),
+                  date: proof.normalized.date,
+                  normalized: proof.baseString,
                   hash: proof.hash,
                   txSignature: solanaResult.signature,
                   createdAt: Date.now(),
                 };
 
                 const final = {
-                  ...data,
+                  merchant: proof.normalized.merchant,
+                  amount: Number(proof.normalized.amount),
+                  date: proof.normalized.date,
+                  category: data.category,
                   normalized: finalProof.normalized,
                   hash: proof.hash,
-                  proofString: `${proof.normalized}|${proof.hash}|${solanaResult.signature}`,
+                  proofString: anchoredProof.proofString,
                   txSignature: solanaResult.signature,
                   createdAt: finalProof.createdAt,
                   explorerUrl: solanaResult.explorerUrl,
@@ -246,6 +267,7 @@ export default function Home() {
                 console.log("Final Proof:", final);
 
                 setConfirmed(final);
+                setCopyStatus("idle");
               } catch (err) {
                 setError(
                   err instanceof Error
@@ -278,6 +300,20 @@ export default function Home() {
               <div>{confirmed.proofString}</div>
             </div>
 
+            <button
+              type="button"
+              onClick={() => handleCopyProof(confirmed.proofString)}
+              className="w-full py-3 bg-white/10 border border-white/30 rounded-xl font-medium text-white"
+            >
+              {copyStatus === "copied" ? "Copied" : "Copy Proof"}
+            </button>
+
+            {copyStatus === "failed" && (
+              <div className="text-xs text-red-300">
+                Failed to copy proof. Select and copy it manually.
+              </div>
+            )}
+
             <a
               href={confirmed.explorerUrl}
               target="_blank"
@@ -290,18 +326,15 @@ export default function Home() {
 
         <div className="space-y-3">
           <div className="flex gap-3">
-            <button
-              onClick={handleExportProofs}
-              className="flex-1 py-3 bg-white/10 border border-white/30 rounded-xl font-medium"
-            >
-              Export Proofs
-            </button>
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="flex-1 py-3 bg-white/10 border border-white/30 rounded-xl font-medium"
-            >
-              Import Proofs
-            </button>
+            {confirmed && (
+              <button
+                type="button"
+                onClick={() => handleExportProof(confirmed)}
+                className="flex-1 py-3 bg-white/10 border border-white/30 rounded-xl font-medium"
+              >
+                Export Proof
+              </button>
+            )}
           </div>
 
           {storedProofs.length > 0 && (

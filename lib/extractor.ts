@@ -26,10 +26,12 @@ export function extractExpenseData(ocrText: string): ExtractedData {
 
   const amountResult = extractAmount(lines);
   const merchantResult = extractMerchant(lines);
-  const date = extractDate(ocrText) || new Date().toISOString().split("T")[0];
+  const date = extractDate(ocrText);
 
   const overallConfidence =
-    amountResult.confidence === "low" || merchantResult.confidence === "low"
+    !date ||
+    amountResult.confidence === "low" ||
+    merchantResult.confidence === "low"
       ? "low"
       : amountResult.confidence === "medium" ||
           merchantResult.confidence === "medium"
@@ -39,7 +41,7 @@ export function extractExpenseData(ocrText: string): ExtractedData {
   return {
     merchant: merchantResult.value,
     amount: amountResult.value,
-    date,
+    date: date ?? "",
     confidence: overallConfidence,
     rawText: cleaned,
   };
@@ -129,7 +131,7 @@ function extractMerchant(lines: string[]): {
   }
 
   return {
-    value: lines[0] || "Unknown Merchant",
+    value: "",
     confidence: "low",
   };
 }
@@ -156,9 +158,9 @@ function extractDate(text: string): string | null {
       day = b;
       month = a;
     } else {
-      day = a;
-      month = b;
-    } // default DD-MM
+      month = a;
+      day = b;
+    }
 
     if (month < 1 || month > 12) continue;
     if (day < 1 || day > 31) continue;
@@ -201,22 +203,4 @@ function extractDate(text: string): string | null {
   }
 
   return null;
-}
-
-function getMonthIndex(abbr: string): number {
-  const months = [
-    "jan",
-    "feb",
-    "mar",
-    "apr",
-    "may",
-    "jun",
-    "jul",
-    "aug",
-    "sep",
-    "oct",
-    "nov",
-    "dec",
-  ];
-  return months.indexOf(abbr.toLowerCase());
 }

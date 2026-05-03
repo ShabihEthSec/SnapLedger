@@ -20,6 +20,72 @@ const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
 );
 
+type ImportableProof = {
+  merchant?: string;
+  amount?: number | string;
+  date?: string;
+  normalized?: string;
+  hash?: string;
+  tx?: string;
+  txSignature?: string;
+  proofString?: string;
+  createdAt?: number;
+};
+
+function isImportableProof(value: unknown): value is ImportableProof {
+  if (!value || typeof value !== "object") return false;
+
+  const proof = value as Partial<ImportableProof>;
+
+  return (
+    typeof proof.hash === "string" &&
+    ((typeof proof.normalized === "string" &&
+      (typeof proof.tx === "string" ||
+        typeof proof.txSignature === "string" ||
+        proof.tx === undefined ||
+        proof.txSignature === undefined)) ||
+      (typeof proof.merchant === "string" &&
+        (typeof proof.amount === "string" ||
+          typeof proof.amount === "number") &&
+        typeof proof.date === "string"))
+  );
+}
+
+function toProofString(proof: ImportableProof) {
+  if (typeof proof.proofString === "string") {
+    return proof.proofString;
+  }
+
+  const tx = proof.tx ?? proof.txSignature ?? "";
+
+  if (proof.normalized && proof.hash) {
+    const hashProof = `${proof.normalized}|${proof.hash}`;
+    return tx ? `${hashProof}|${tx}` : hashProof;
+  }
+
+  const amount =
+    typeof proof.amount === "number" ? proof.amount.toFixed(2) : proof.amount;
+  const hashProof = `${proof.merchant}|${amount}|${proof.date}|${proof.hash}`;
+
+  return tx ? `${hashProof}|${tx}` : hashProof;
+}
+
+function isValidIsoDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 function getMemoData(tx: TransactionResponse | VersionedTransactionResponse) {
   const message = tx.transaction.message;
   const accountKeys = message.getAccountKeys({
@@ -38,53 +104,88 @@ function getMemoData(tx: TransactionResponse | VersionedTransactionResponse) {
 }
 
 export default function VerifyPage() {
+  const importInputId = "verify-proof-import";
   const [proof, setProof] = useState(() => {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("proof") ?? "";
   });
   const [result, setResult] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  async function handleImportProof(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const trimmedText = text.trim();
+
+      if (!trimmedText) {
+        setImportError("Imported file is empty");
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmedText);
+        const importedProof = Array.isArray(parsed)
+          ? parsed
+              .filter(isImportableProof)
+              .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
+          : isImportableProof(parsed)
+            ? parsed
+            : null;
+
+        if (!importedProof) {
+          setImportError("Invalid proof JSON");
+          return;
+        }
+
+        setProof(toProofString(importedProof));
+      } catch {
+        setProof(trimmedText);
+      }
+
+      setResult(null);
+      setImportError(null);
+    } catch {
+      setImportError("Failed to import proof");
+    } finally {
+      event.target.value = "";
+    }
+  }
 
   async function handleVerify() {
     try {
       const input = proof.trim();
       const parts = input.split("|");
 
-      if (parts.length === 1) {
+      if (parts.length !== 4 && parts.length !== 5) {
         setResult("❌ Invalid proof format");
         return;
       }
 
-      if (parts.length === 2) {
-        const [hash, txSignature] = parts;
+      const [merchant, amount, date, hash, txSignature] = parts;
+      const normalized = `${merchant}|${amount}|${date}`;
 
-        const tx = await connection.getTransaction(txSignature, {
-          maxSupportedTransactionVersion: 0,
-        });
-
-        if (!tx) {
-          setResult("❌ Transaction not found");
-          return;
-        }
-
-        const memoData = getMemoData(tx);
-
-        if (memoData === hash) {
-          setResult("⚠️ Hash found on-chain, but no input data provided");
-        } else {
-          setResult("❌ INVALID — Data does not match original proof");
-        }
-
+      if (
+        merchant !== merchant.trim().toLowerCase().replace(/\s+/g, " ") ||
+        !/^\d+\.\d{2}$/.test(amount) ||
+        !isValidIsoDate(date)
+      ) {
+        setResult("❌ Invalid normalized proof fields");
         return;
       }
-
-      const [hash, txSignature] = parts.slice(-2);
-      const normalized = parts.slice(0, -2).join("|");
 
       // 🔁 Recompute hash
       const recomputedHash = hashNormalizedExpense(normalized);
 
       if (recomputedHash !== hash) {
         setResult("❌ INVALID — Data does not match original proof");
+        return;
+      }
+
+      if (!txSignature) {
+        setResult("⚠️ Hash is valid, but no transaction id was provided");
         return;
       }
 
@@ -127,12 +228,33 @@ export default function VerifyPage() {
           className="w-full p-3 bg-white/10 border border-white/20 rounded-xl"
         />
 
+        <input
+          id={importInputId}
+          type="file"
+          accept="application/json,.json,text/plain,.txt"
+          onChange={handleImportProof}
+          className="sr-only"
+        />
+
+        <label
+          htmlFor={importInputId}
+          className="w-full py-3 bg-white/10 border border-white/30 rounded-xl font-medium text-center"
+        >
+          Import Proof
+        </label>
+
         <button
           onClick={handleVerify}
           className="w-full py-3 bg-blue-600 rounded-xl"
         >
           Verify
         </button>
+
+        {importError && (
+          <div className="p-3 border border-red-500/50 bg-red-500/20 rounded-xl text-red-300 text-sm">
+            {importError}
+          </div>
+        )}
 
         {result && <div className="p-3 border rounded-xl text-sm">{result}</div>}
       </div>

@@ -29,12 +29,13 @@ export default function OcrProcessor({
     if (!imageBlobUrl) return;
 
     let cancelled = false;
+    const sourceImage = imageBlobUrl;
 
     async function runOCR() {
       try {
         setIsLoading(true);
 
-        const result = await Tesseract.recognize(imageBlobUrl, "eng", {
+        const result = await Tesseract.recognize(sourceImage, "eng", {
           logger: (m) => {
             // Optional: you can show progress in UI later
             console.log(m);
@@ -48,7 +49,7 @@ export default function OcrProcessor({
           onTextExtracted(extractedText);
           setIsLoading(false);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled && mountedRef.current) {
           console.error("OCR Error:", err);
           onError("OCR failed. Try a clearer image.");
