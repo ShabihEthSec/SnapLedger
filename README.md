@@ -45,6 +45,16 @@ Receipt → OCR → Extract → Confirm → Normalize → Hash → Solana → Ve
 
 ## 🧱 What’s Implemented
 
+## 🤖 QVAC Integration (Tether Track)
+
+SnapLedger integrates Tether’s QVAC SDK to perform local OCR inference via a Node.js API route.
+
+- Runs OCR using QVAC locally (no external API)
+- Model loaded and cached server-side
+- Fallback to Tesseract for reliability
+
+This demonstrates real-world usage of QVAC for on-device AI in financial workflows.
+
 ### ✅ OCR Pipeline
 
 - Mobile-first camera capture

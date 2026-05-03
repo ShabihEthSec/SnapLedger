@@ -3,14 +3,18 @@
 import { useState, useEffect, useRef } from "react";
 import Tesseract from "tesseract.js";
 
+type OcrEngine = "tesseract" | "qvac";
+
 interface Props {
   imageBlobUrl: string | null;
+  engine: OcrEngine;
   onTextExtracted: (text: string) => void;
   onError: (msg: string) => void;
 }
 
 export default function OcrProcessor({
   imageBlobUrl,
+  engine,
   onTextExtracted,
   onError,
 }: Props) {
@@ -35,6 +39,30 @@ export default function OcrProcessor({
       try {
         setIsLoading(true);
 
+        if (engine === "qvac") {
+          const formData = new FormData();
+          const blob = await fetch(sourceImage).then((r) => r.blob());
+          formData.append("image", blob);
+
+          const res = await fetch("/api/ocr-qvac", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!res.ok) {
+            throw new Error("QVAC OCR failed");
+          }
+
+          const data = (await res.json()) as { text?: string };
+
+          if (!cancelled && mountedRef.current) {
+            onTextExtracted((data.text ?? "").trim());
+            setIsLoading(false);
+          }
+
+          return;
+        }
+
         const result = await Tesseract.recognize(sourceImage, "eng", {
           logger: (m) => {
             // Optional: you can show progress in UI later
@@ -52,7 +80,11 @@ export default function OcrProcessor({
       } catch (err: unknown) {
         if (!cancelled && mountedRef.current) {
           console.error("OCR Error:", err);
-          onError("OCR failed. Try a clearer image.");
+          onError(
+            engine === "qvac"
+              ? "QVAC OCR failed. Try Tesseract or a clearer image."
+              : "OCR failed. Try a clearer image.",
+          );
           setIsLoading(false);
         }
       }
@@ -63,14 +95,16 @@ export default function OcrProcessor({
     return () => {
       cancelled = true;
     };
-  }, [imageBlobUrl]);
+  }, [imageBlobUrl, engine, onTextExtracted, onError]);
 
   return (
     <div className="w-full">
       {isLoading && (
         <div className="flex items-center justify-center gap-2 py-3 text-white/70">
           <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
-          <span>Extracting text locally...</span>
+          <span>
+            {engine === "qvac" ? "Extracting text with QVAC..." : "Extracting text locally..."}
+          </span>
         </div>
       )}
     </div>
