@@ -2,6 +2,8 @@
 "use client";
 import { useState } from "react";
 import type { ExtractedData } from "@/lib/extractor";
+import WalletAnalysis from "./WalletAnalysis";
+import { CounterpartyRisk } from "@/lib/goldrush";
 
 interface Props {
   extracted: ExtractedData;
@@ -33,8 +35,16 @@ export default function ConfirmExpense({
   const [date, setDate] = useState(extracted.date);
   const [category, setCategory] = useState("Other");
 
+  const [recipientAddress, setRecipientAddress] = useState("");
+  const [riskOverride, setRiskOverride] = useState(false);
+  const [riskData, setRiskData] = useState<CounterpartyRisk | null>(null);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!recipientAddress) {
+      alert("Please analyze recipient wallet before confirming.");
+      return;
+    }
     const numAmount = parseFloat(amount);
     if (!merchant || isNaN(numAmount) || numAmount <= 0) return;
     onConfirm({ merchant, amount: numAmount, date, category });
@@ -92,11 +102,53 @@ export default function ConfirmExpense({
           ))}
         </select>
       </div>
+      <div className="mt-4 border-t border-white/20 pt-4 space-y-3">
+        <label className="text-white/70 text-sm">
+          Recipient Wallet (analyzed before confirming)
+        </label>
+
+        <input
+          type="text"
+          value={recipientAddress}
+          onChange={(e) => {
+            setRecipientAddress(e.target.value);
+            setRiskOverride(false);
+          }}
+          placeholder="Paste Solana wallet address"
+          className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-white"
+        />
+
+        {recipientAddress && (
+          <WalletAnalysis
+            address={recipientAddress}
+            onAnalysisComplete={(risk) => setRiskData(risk)}
+          />
+        )}
+
+        {/* 🚨 Risk warning + override */}
+        {riskData?.level === "HIGH" && (
+          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-sm">
+            <p className="text-red-300 font-medium">
+              ⚠ High-risk wallet detected
+            </p>
+
+            <label className="flex items-center gap-2 mt-2 text-white/80">
+              <input
+                type="checkbox"
+                checked={riskOverride}
+                onChange={(e) => setRiskOverride(e.target.checked)}
+              />
+              I understand the risk and want to proceed
+            </label>
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-3">
         <button
           type="submit"
-          className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-medium"
+          disabled={riskData?.level === "HIGH" && !riskOverride}
+          className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-medium disabled:opacity-50"
         >
           ✅ Confirm
         </button>
