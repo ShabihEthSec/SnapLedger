@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import OcrProcessor from "./OcrProcessor";
 import ConfirmExpense from "./ConfirmExpense";
 import { extractExpenseData } from "@/lib/extractor";
@@ -23,7 +23,6 @@ type ConfirmedExpense = {
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
-  const [engine, setEngine] = useState<"tesseract" | "qvac">("tesseract");
   const [ocrText, setOcrText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -34,21 +33,6 @@ export default function Home() {
   const [storedProofs, setStoredProofs] = useState<StoredProof[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function handleEngineChange(nextEngine: "tesseract" | "qvac") {
-    setEngine(nextEngine);
-    setError(null);
-
-    if (image) {
-      setOcrText("");
-      setConfirmed(null);
-      setCopyStatus("idle");
-    }
-  }
-
-  const handleOcrError = useCallback((msg: string) => {
-    setError(msg);
-  }, []);
 
   async function refreshProofs() {
     const proofs = await getAllProofs();
@@ -198,31 +182,6 @@ export default function Home() {
           </button>
         )}
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => handleEngineChange("tesseract")}
-            className={`py-2 rounded-xl border font-medium ${
-              engine === "tesseract"
-                ? "bg-white text-black border-white"
-                : "bg-white/10 border-white/30"
-            }`}
-          >
-            Tesseract
-          </button>
-          <button
-            type="button"
-            onClick={() => handleEngineChange("qvac")}
-            className={`py-2 rounded-xl border font-medium ${
-              engine === "qvac"
-                ? "bg-white text-black border-white"
-                : "bg-white/10 border-white/30"
-            }`}
-          >
-            QVAC
-          </button>
-        </div>
-
         {/* 📷 Image Preview */}
         {image && (
           <div className="rounded-2xl overflow-hidden border border-white/20">
@@ -238,9 +197,8 @@ export default function Home() {
         {image && !ocrText && (
           <OcrProcessor
             imageBlobUrl={image}
-            engine={engine}
             onTextExtracted={setOcrText}
-            onError={handleOcrError}
+            onError={(msg) => setError(msg)}
           />
         )}
 
