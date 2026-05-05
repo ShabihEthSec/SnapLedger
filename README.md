@@ -33,13 +33,34 @@ Instead of storing receipts, SnapLedger generates **tamper-evident proofs**:
 
 ---
 
-## 🔁 End-to-End Flow
+## 🔁 Updated End-to-End Flow
 
 ```
 
-Receipt → OCR → Extract → Confirm → Normalize → Hash → Solana → Verify
+Receipt → OCR → Extract → Confirm → Analyse Recipient (GoldRush) → Trust Score → Confirm/Reject → Hash → Solana → Verify
 
 ```
+
+---
+
+## ✅ What’s New — GoldRush Risk Engine
+
+SnapLedger now analyzes recipient wallets before anchoring expense proofs, powered by GoldRush's structured on‑chain data.
+
+Risk Analysis Flow
+User enters the recipient's Solana wallet address
+
+SnapLedger fetches wallet balances & transaction history via GoldRush
+
+On‑chain intelligence computes a Counterparty Trust Score (0–100)
+
+Wallet is classified: merchant, trader, institutional, burner, etc.
+
+Behavioral warnings are surfaced (burst activity, dormant wallet, DEX dominance)
+
+HIGH‑RISK wallets require explicit user override before proceeding
+
+This transforms SnapLedger from a receipt prover into a trust‑minimised expense verification & settlement tool.
 
 ---
 
@@ -105,7 +126,23 @@ normalized|hash|txSignature
 - Import JSON restore
 - Deep-link verification support
 
+### 🆕 GoldRush Wallet Risk Analysis
+
+- Server‑side API route (/api/analyze-wallet)
+
+- Wallet classification (merchant, trader, burner, institutional)
+
+- Behavioural flags (burst activity, dormant, DEX‑heavy, sybil risk)
+
+- Trust score and human‑readable reasoning
+
+- Risk‑enforced UI (confirm button locked for HIGH risk unless overridden)
+
 ---
+
+## 🔗 Why GoldRush?
+
+## GoldRush provides **structured, decoded blockchain data** — token balances, USD quotes, transaction classifications — without running our own indexer. This makes genuine on‑chain counterparty insight possible in a hackathon timeframe.
 
 ## 🔗 Why Solana?
 
@@ -179,6 +216,7 @@ starbucks|64.42|2019-03-01|3ec101...|txSignature
 - Tesseract.js (OCR)
 - Solana Web3.js (SPL Memo)
 - IndexedDB (local persistence)
+- GoldRush API (Covalent) – wallet intelligence & risk scoring
 
 ---
 
@@ -216,6 +254,12 @@ It is a:
 ## 🏁 Hackathon Context
 
 Built for Frontier / Solana ecosystem.
+
+This project is submitted to:
+
+- **GoldRush Track** (Covalent) – counterparty risk scoring + on‑chain verification
+
+- (more tracks can be added as integrations ship)
 
 Focus:
 
