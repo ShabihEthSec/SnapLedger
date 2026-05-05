@@ -15,13 +15,21 @@ export default function OcrProcessor({
   onError,
 }: Props) {
   const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ hooks MUST be inside component
   const mountedRef = useRef(true);
+  const isRunningRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
 
     return () => {
       mountedRef.current = false;
+
+      if (abortRef.current) {
+        abortRef.current.abort(); // cleanup
+      }
     };
   }, []);
 
@@ -32,6 +40,10 @@ export default function OcrProcessor({
     const sourceImage = imageBlobUrl;
 
     async function runOCR() {
+      if (isRunningRef.current) return;
+
+      isRunningRef.current = true;
+
       try {
         setIsLoading(true);
 
@@ -43,19 +55,18 @@ export default function OcrProcessor({
         });
 
         if (!cancelled && mountedRef.current) {
-          const extractedText = result.data.text.trim();
-          console.log("OCR Result:", extractedText);
-
-          onTextExtracted(extractedText);
-          setIsLoading(false);
+          onTextExtracted(result.data.text.trim());
         }
-      } catch (err: unknown) {
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+
         if (!cancelled && mountedRef.current) {
           console.error("OCR Error:", err);
           onError("OCR failed. Try a clearer image.");
 
           setIsLoading(false);
         }
+        isRunningRef.current = false;
       }
     }
 
