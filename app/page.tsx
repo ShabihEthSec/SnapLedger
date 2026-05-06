@@ -7,6 +7,8 @@ import { extractExpenseData } from "@/lib/extractor";
 import { generateExpenseProof } from "@/lib/proof";
 import { sendProofToSolana } from "@/lib/solana";
 import { getAllProofs, saveProof, type StoredProof } from "@/lib/db";
+import { useSolflare } from "@/hooks/useSolflare";
+import OpenInSolflare from "@/components/OpenInSolflare";
 
 type ConfirmedExpense = {
   merchant: string;
@@ -33,6 +35,9 @@ export default function Home() {
   const [storedProofs, setStoredProofs] = useState<StoredProof[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { connected, connect, disconnect, publicKey, isSolflareBrowser } =
+    useSolflare();
 
   async function refreshProofs() {
     const proofs = await getAllProofs();
@@ -134,7 +139,6 @@ export default function Home() {
   const extracted = useMemo(() => {
     if (!ocrText) return null;
 
-    // 🔍 ADD THIS BLOCK
     console.log("=== RAW OCR TEXT ===");
     console.log(JSON.stringify(ocrText));
     console.log("===================");
@@ -149,6 +153,47 @@ export default function Home() {
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md mx-auto flex flex-col gap-6">
         <h1 className="text-xl font-semibold text-center">Snap a Receipt</h1>
+
+        {/* 🔐 Solflare Wallet Connection */}
+        <div className="p-4 border border-white/20 rounded-2xl bg-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-white/60">Wallet Status</div>
+
+              {connected ? (
+                <div className="text-green-400 text-sm font-medium break-all">
+                  Connected: {publicKey?.toBase58()}
+                </div>
+              ) : (
+                <div className="text-yellow-400 text-sm">Not connected</div>
+              )}
+            </div>
+
+            {connected ? (
+              <button
+                onClick={disconnect}
+                className="px-4 py-2 bg-red-500/20 border border-red-500/40 rounded-xl text-sm"
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                onClick={connect}
+                className="px-4 py-2 bg-white text-black rounded-xl text-sm font-medium"
+              >
+                Connect Solflare
+              </button>
+            )}
+          </div>
+
+          <div className="text-xs text-white/50">
+            {isSolflareBrowser
+              ? "Inside Solflare browser"
+              : "Outside Solflare browser"}
+          </div>
+
+          <OpenInSolflare />
+        </div>
 
         <a
           href="/verify"
@@ -350,6 +395,7 @@ export default function Home() {
                       {proof.amount.toFixed(2)} | {proof.date}
                     </div>
                   </div>
+
                   <a
                     href={`/verify?proof=${encodeURIComponent(
                       `${proof.normalized}|${proof.hash}|${proof.txSignature}`,
