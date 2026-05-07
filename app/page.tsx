@@ -7,8 +7,6 @@ import { extractExpenseData } from "@/lib/extractor";
 import { generateExpenseProof } from "@/lib/proof";
 import { sendProofToSolana } from "@/lib/solana";
 import { getAllProofs, saveProof, type StoredProof } from "@/lib/db";
-import { useSolflare } from "@/hooks/useSolflare";
-import OpenInSolflare from "@/components/OpenInSolflare";
 
 type ConfirmedExpense = {
   merchant: string;
@@ -36,8 +34,41 @@ export default function Home() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { connected, connect, disconnect, publicKey, isSolflareBrowser } =
-    useSolflare();
+  // 🔐 Standard Wallet Connection (Simplified)
+  const [connected, setConnected] = useState(false);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+
+  const connectWallet = async () => {
+    try {
+      const { solana } = window as any;
+      if (solana?.isPhantom || solana) {
+        const response = await solana.connect();
+        setPublicKey(response.publicKey.toString());
+        setConnected(true);
+      } else {
+        window.open("https://phantom.app/", "_blank");
+      }
+    } catch (err) {
+      console.error("Wallet connection failed", err);
+    }
+  };
+
+  const disconnectWallet = () => {
+    const { solana } = window as any;
+    if (solana) {
+      solana.disconnect?.();
+    }
+    setConnected(false);
+    setPublicKey(null);
+  };
+
+  useEffect(() => {
+    const { solana } = window as any;
+    if (solana?.isPhantom && solana.publicKey) {
+      setPublicKey(solana.publicKey.toString());
+      setConnected(true);
+    }
+  }, []);
 
   async function refreshProofs() {
     const proofs = await getAllProofs();
@@ -154,7 +185,7 @@ export default function Home() {
       <div className="w-full max-w-md mx-auto flex flex-col gap-6">
         <h1 className="text-xl font-semibold text-center">Snap a Receipt</h1>
 
-        {/* 🔐 Solflare Wallet Connection */}
+        {/* 🔐 Wallet Connection */}
         <div className="p-4 border border-white/20 rounded-2xl bg-white/5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -162,7 +193,7 @@ export default function Home() {
 
               {connected ? (
                 <div className="text-green-400 text-sm font-medium break-all">
-                  Connected: {publicKey?.toBase58()}
+                  Connected: {publicKey}
                 </div>
               ) : (
                 <div className="text-yellow-400 text-sm">Not connected</div>
@@ -171,28 +202,20 @@ export default function Home() {
 
             {connected ? (
               <button
-                onClick={disconnect}
+                onClick={disconnectWallet}
                 className="px-4 py-2 bg-red-500/20 border border-red-500/40 rounded-xl text-sm"
               >
                 Disconnect
               </button>
             ) : (
               <button
-                onClick={connect}
+                onClick={connectWallet}
                 className="px-4 py-2 bg-white text-black rounded-xl text-sm font-medium"
               >
-                Connect Solflare
+                Connect Wallet
               </button>
             )}
           </div>
-
-          <div className="text-xs text-white/50">
-            {isSolflareBrowser
-              ? "Inside Solflare browser"
-              : "Outside Solflare browser"}
-          </div>
-
-          <OpenInSolflare />
         </div>
 
         <a

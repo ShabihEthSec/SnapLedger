@@ -54,7 +54,7 @@ export default function WalletAnalysis({ address }: Props) {
       <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
         <div className="flex items-center justify-between">
           <span
-            className={`font-bold ${risk.level === "HIGH" ? "text-red-400" : risk.level === "ELEVATED" ? "text-orange-400" : risk.level === "MEDIUM" ? "text-yellow-400" : "text-green-400"}`}
+            className={`font-bold ${risk.level === "HIGH" ? "text-red-400" : risk.level === "MEDIUM" ? "text-yellow-400" : "text-green-400"}`}
           >
             {risk.level} RISK
           </span>
@@ -83,11 +83,11 @@ export default function WalletAnalysis({ address }: Props) {
         </div>
         <div className="p-2 bg-gray-800/30 rounded">
           <span className="text-gray-500">Age</span>
-          <p className="text-white">{risk.accountAgeDays}d</p>
+          <p className="text-white">{risk.details.ageInDays}d</p>
         </div>
         <div className="p-2 bg-gray-800/30 rounded">
           <span className="text-gray-500">TXs</span>
-          <p className="text-white">{risk.totalTransactions}</p>
+          <p className="text-white">{risk.transactionCount}</p>
         </div>
         <div className="p-2 bg-gray-800/30 rounded">
           <span className="text-gray-500">30d Vol</span>
@@ -97,10 +97,11 @@ export default function WalletAnalysis({ address }: Props) {
 
       <details className="text-xs">
         <summary className="cursor-pointer text-gray-400 hover:text-white">
-          Reasoning & details
+          Detailed Details
         </summary>
-        <p className="mt-1 text-gray-300">{risk.reasoning}</p>
-        <p className="mt-1 text-gray-500">Confidence: {risk.confidence}%</p>
+        <p className="mt-1 text-gray-300">Avg TX Value: ${risk.details.avgTransactionValue.toFixed(2)}</p>
+        <p className="mt-1 text-gray-300">Tokens Found: {risk.tokenCount}</p>
+        <p className="mt-1 text-gray-300">Total USD Balance: ${risk.totalValueUSD.toFixed(2)}</p>
       </details>
     </div>
   );
