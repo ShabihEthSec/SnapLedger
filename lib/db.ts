@@ -8,18 +8,47 @@ export type StoredProof = {
   createdAt: number;
 };
 
+export type Invoice = {
+  id: string;
+  clientName: string;
+  description?: string;
+  totalUsd: number;
+  currency: string;
+  status: "PENDING" | "PAID";
+  dodoSessionId?: string;
+  createdAt: number;
+};
+
+export type Payment = {
+  id: string;
+  invoiceId: string;
+  paymentId: string;
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: number;
+};
+
 const DB_NAME = "snapledger";
-const DB_VERSION = 1;
-const STORE_NAME = "proofs";
+const DB_VERSION = 2;
+const STORE_PROOFS = "proofs";
+const STORE_INVOICES = "invoices";
+const STORE_PAYMENTS = "payments";
 
 export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "hash" });
+      if (!db.objectStoreNames.contains(STORE_PROOFS)) {
+        db.createObjectStore(STORE_PROOFS, { keyPath: "hash" });
+      }
+      if (!db.objectStoreNames.contains(STORE_INVOICES)) {
+        db.createObjectStore(STORE_INVOICES, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(STORE_PAYMENTS)) {
+        db.createObjectStore(STORE_PAYMENTS, { keyPath: "id" });
       }
     };
 
@@ -29,31 +58,16 @@ export function openDB(): Promise<IDBDatabase> {
   });
 }
 
-function isValidProof(value: unknown): value is StoredProof {
-  if (!value || typeof value !== "object") return false;
-
-  const proof = value as Partial<StoredProof>;
-
-  return (
-    typeof proof.merchant === "string" &&
-    typeof proof.amount === "number" &&
-    typeof proof.date === "string" &&
-    typeof proof.normalized === "string" &&
-    typeof proof.hash === "string" &&
-    typeof proof.txSignature === "string" &&
-    typeof proof.createdAt === "number"
-  );
-}
-
 function runStore<T>(
+  storeName: string,
   mode: IDBTransactionMode,
   callback: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
   return openDB().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, mode);
-        const store = tx.objectStore(STORE_NAME);
+        const tx = db.transaction(storeName, mode);
+        const store = tx.objectStore(storeName);
         const request = callback(store);
 
         request.onsuccess = () => resolve(request.result);
@@ -68,40 +82,33 @@ function runStore<T>(
   );
 }
 
+// Proofs
 export async function saveProof(proof: StoredProof) {
-  if (!isValidProof(proof)) return;
-  await runStore("readwrite", (store) => store.put(proof));
+  await runStore("readwrite", STORE_PROOFS, (store) => store.put(proof));
 }
 
 export async function getAllProofs() {
-  return runStore<StoredProof[]>("readonly", (store) => store.getAll());
+  return runStore<StoredProof[]>(STORE_PROOFS, "readonly", (store) => store.getAll());
 }
 
-export async function clearProofs() {
-  await runStore("readwrite", (store) => store.clear());
+// Invoices
+export async function saveInvoice(invoice: Invoice) {
+  await runStore(STORE_INVOICES, "readwrite", (store) => store.put(invoice));
 }
 
-export async function bulkInsertProofs(proofs: unknown[]) {
-  const validProofs = proofs.filter(isValidProof);
-  if (validProofs.length === 0) return;
+export async function getAllInvoices() {
+  return runStore<Invoice[]>(STORE_INVOICES, "readonly", (store) => store.getAll());
+}
 
-  const db = await openDB();
+export async function getInvoice(id: string) {
+  return runStore<Invoice>(STORE_INVOICES, "readonly", (store) => store.get(id));
+}
 
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
+// Payments
+export async function savePayment(payment: Payment) {
+  await runStore(STORE_PAYMENTS, "readwrite", (store) => store.put(payment));
+}
 
-    for (const proof of validProofs) {
-      store.put(proof);
-    }
-
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error ?? new Error("Failed to import proofs"));
-    };
-  });
+export async function getAllPayments() {
+  return runStore<Payment[]>(STORE_PAYMENTS, "readonly", (store) => store.getAll());
 }

@@ -218,12 +218,20 @@ export default function Home() {
           </div>
         </div>
 
-        <a
-          href="/verify"
-          className="w-full py-3 bg-white/10 border border-white/30 rounded-xl font-medium text-center"
-        >
-          Go to Verify Page
-        </a>
+        <div className="grid grid-cols-2 gap-3">
+          <a
+            href="/verify"
+            className="w-full py-3 bg-white/10 border border-white/30 rounded-xl font-medium text-center"
+          >
+            Verify Proof
+          </a>
+          <a
+            href="/invoices"
+            className="w-full py-3 bg-blue-600/20 border border-blue-600/40 rounded-xl font-medium text-center text-blue-400"
+          >
+            Invoices
+          </a>
+        </div>
 
         <input
           type="file"

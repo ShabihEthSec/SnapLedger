@@ -2,221 +2,62 @@
 
 > Don’t track expenses. Prove them.
 
-SnapLedger is a mobile-first, verifiable expense proof system for crypto freelancers. It allows users to capture receipts, extract data locally, generate deterministic proofs, and anchor them on Solana for independent verification.
-
----
-
-## 🚨 Problem
-
-Freelancers paid in USDC/USDT (especially in India, SEA, LatAm) face a major issue:
-
-- Expenses are tracked via spreadsheets or screenshots
-- Receipts can be easily manipulated
-- No reliable way to **prove authenticity** during audits or reimbursements
-- Heavy dependence on trust (client, accountant, or platform)
-
----
-
-## 💡 Solution
-
-SnapLedger replaces trust with **cryptographic verification**.
-
-Instead of storing receipts, SnapLedger generates **tamper-evident proofs**:
-
-1. 📸 Capture a receipt
-2. 🤖 Extract data locally (OCR)
-3. 🧠 Detect merchant, amount, date
-4. ✏️ User confirms or edits
-5. 🔐 Generate deterministic proof (SHA-256 hash)
-6. ⛓️ Anchor hash on Solana (SPL Memo)
-7. 🔍 Verify proof independently
+SnapLedger is a mobile-first, verifiable invoicing and expense proof system. It allows users to capture receipts, extract data, process stablecoin payments via **Dodo Payments**, and anchor proofs on Solana with **SNS Identity** integration.
 
 ---
 
 ## 🔁 Updated End-to-End Flow
 
 ```
-
-Receipt → OCR → Extract → Confirm → Analyse Recipient (GoldRush) → Trust Score → Confirm/Reject → Hash → Solana → Verify
-
+Receipt → OCR → Invoice → Pay via USDC (Dodo) → SNS Identity → On-Chain Proof → Solana
 ```
 
 ---
 
-## ✅ What’s New — GoldRush Risk Engine
+## ✅ New Features
 
-SnapLedger now analyzes recipient wallets before anchoring expense proofs, powered by GoldRush's structured on‑chain data.
+### 💳 Stablecoin Payments (Dodo)
+- Integrated **Dodo Payments** for seamless USDC (Solana) and Card payments.
+- Real-time payment verification via Webhooks.
+- Automatic on-chain anchoring upon successful settlement.
 
-Risk Analysis Flow
-User enters the recipient's Solana wallet address
+### 👤 Decentralized Identity (SNS)
+- Support for **Solana Name Service (.sol)** domains.
+- Automatically resolves wallet addresses to human-readable handles.
+- Links identity directly to verifiable payment proofs.
 
-SnapLedger fetches wallet balances & transaction history via GoldRush
-
-On‑chain intelligence computes a Counterparty Trust Score (0–100)
-
-Wallet is classified: merchant, trader, institutional, burner, etc.
-
-Behavioral warnings are surfaced (burst activity, dormant wallet, DEX dominance)
-
-HIGH‑RISK wallets require explicit user override before proceeding
-
-This transforms SnapLedger from a receipt prover into a trust‑minimised expense verification & settlement tool.
+### ⛓️ Proof of Payment
+- Every paid invoice generates an immutable proof on Solana via SPL Memo.
+- Publicly verifiable, tamper-evident audit trail.
 
 ---
 
 ## 🧱 What’s Implemented
 
-### ✅ OCR Pipeline
+### ✅ Invoicing System
+- Create and manage invoices locally (IndexedDB).
+- "Offline-first" design with secure server-side payment processing.
 
+### ✅ OCR Pipeline
 - Mobile-first camera capture
 - OCR using `tesseract.js`
 - Fully client-side (no backend)
 
-### ✅ Intelligent Extraction
-
-- Amount detection (multi-strategy)
-- Merchant filtering + heuristics
-- Date parsing (multi-match + validation)
-- Confidence scoring
-
-### ✅ Human-in-the-loop UX
-
-- Editable confirmation screen
-- Error handling + confidence warnings
-
-### ✅ Proof Generation
-
-- Deterministic normalization:
-
-```
-
-merchant|amount|date
-
-```
-
-- SHA-256 hashing
-- Consistent across devices
-
-### ✅ On-Chain Anchoring (Solana)
-
+### ✅ Solana Anchoring
 - Hash stored via SPL Memo
 - Public, immutable, permissionless
-- No centralized dependency
-
-### ✅ Verification System
-
-- Input:
-
-```
-
-normalized|hash|txSignature
-
-```
-
-- Recompute hash locally
-- Fetch transaction from Solana
-- Compare memo data
-
-✔ Detects tampering instantly
-
-### ✅ Persistence & Recovery
-
-- IndexedDB (local storage of proofs)
-- Export JSON backup (`snapledger-proofs.json`)
-- Import JSON restore
-- Deep-link verification support
-
-### 🆕 GoldRush Wallet Risk Analysis
-
-- Server‑side API route (/api/analyze-wallet)
-
-- Wallet classification (merchant, trader, burner, institutional)
-
-- Behavioural flags (burst activity, dormant, DEX‑heavy, sybil risk)
-
-- Trust score and human‑readable reasoning
-
-- Risk‑enforced UI (confirm button locked for HIGH risk unless overridden)
-
----
-
-## 🔗 Why GoldRush?
-
-## GoldRush provides **structured, decoded blockchain data** — token balances, USD quotes, transaction classifications — without running our own indexer. This makes genuine on‑chain counterparty insight possible in a hackathon timeframe.
-
-## 🔗 Why Solana?
-
-SnapLedger uses Solana as a **trust anchor**, not a database.
-
-Instead of storing full data:
-
-- Only the **hash** is stored on-chain
-- Full data remains user-controlled
-
-### Benefits:
-
-- Permissionless verification
-- No platform dependency
-- Low cost + high throughput
-- Tamper-evident records
-
----
-
-## 🧠 Architecture
-
-```
-
-User Data (local / export)
-↓
-Normalized → SHA256 Hash
-↓
-Solana (immutable anchor)
-
-```
-
----
-
-## 🧪 Example Proof
-
-```text
-starbucks|64.42|2019-03-01|3ec101...|txSignature
-```
-
----
-
-## 🔍 Verification Logic
-
-1. Parse proof
-2. Recompute hash
-3. Compare with provided hash
-4. Fetch Solana transaction
-5. Validate memo
-
-### Result:
-
-- ✅ VALID — data matches and is anchored
-- ❌ INVALID — tampered or mismatch
-
----
-
-## 🎯 Target Users
-
-- Crypto freelancers
-- Remote contractors
-- Digital nomads
-- Anyone needing verifiable expense records
+- Supports any standard Solana wallet (Phantom, etc.)
 
 ---
 
 ## 🧰 Tech Stack
 
-- Next.js (App Router)
-- TypeScript
-- Tailwind CSS
-- Tesseract.js (OCR)
-- Solana Web3.js (SPL Memo)
-- IndexedDB (local persistence)
-- GoldRush API (Covalent) – wallet intelligence & risk scoring
+- **Frontend:** Next.js (App Router), Tailwind CSS
+- **Payments:** Dodo Payments (USDC & Card)
+- **Identity:** Solana Name Service (SNS)
+- **OCR:** Tesseract.js
+- **Blockchain:** Solana (SPL Memo)
+- **Data:** GoldRush (Covalent) for wallet analytics
 
 ---
 
@@ -228,26 +69,14 @@ npm install
 npm run dev
 ```
 
-Open: [http://localhost:3000](http://localhost:3000)
-
----
-
-## ⚠️ Known Limitations
-
-- OCR accuracy depends on image quality
-- Merchant detection is heuristic-based
-- Requires internet for on-chain verification
-- Devnet may have RPC / airdrop instability
-
----
-
-## 🧨 Key Insight
-
-SnapLedger is not an expense tracker.
-
-It is a:
-
-> **Deterministic, verifiable, tamper-evident financial proof system**
+### Environment Variables
+Configure `.env.local`:
+```bash
+DODO_PAYMENTS_API_KEY=sk_test_...
+DODO_PAYMENTS_WEBHOOK_KEY=whsec_...
+DODO_PRODUCT_ID=prod_...
+NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
+```
 
 ---
 
@@ -255,22 +84,8 @@ It is a:
 
 Built for Frontier / Solana ecosystem.
 
-This project is submitted to:
-
-- **GoldRush Track** (Covalent) – counterparty risk scoring + on‑chain verification
-
-- (more tracks can be added as integrations ship)
-
 Focus:
-
-- Real-world problem
-- Offline-first design
+- Real-world utility (Invoicing)
+- Stablecoin adoption (USDC)
+- Social Identity (SNS)
 - Trust minimization
-- Verifiable data
-- Demo-ready UX
-
----
-
-## 👤 Author
-
-Mohd Shabihul Hasan Khan (ShabihEthSec)

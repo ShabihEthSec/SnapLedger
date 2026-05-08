@@ -19,31 +19,43 @@ const MEMO_PROGRAM_ID = new PublicKey(
 
 // ✅ SINGLE SOURCE OF TRUTH
 function getOrCreatePayer(): Keypair {
-  const saved = localStorage.getItem("snapledger_payer");
-
-  if (saved) {
+  // 1. Check for server-side secret key (highest priority)
+  const serverSecret = process.env.SOLANA_PAYER_SECRET;
+  if (serverSecret) {
     try {
-      const secretKey = JSON.parse(saved);
-      if (!Array.isArray(secretKey) || secretKey.length !== 64) {
-        throw new Error("Invalid saved payer key");
-      }
-
+      const secretKey = JSON.parse(serverSecret);
       return Keypair.fromSecretKey(Uint8Array.from(secretKey));
-    } catch {
-      localStorage.removeItem("snapledger_payer");
+    } catch (err) {
+      console.error("Invalid SOLANA_PAYER_SECRET:", err);
     }
   }
 
-  const kp = Keypair.generate();
+  // 2. Check for browser-side storage
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("snapledger_payer");
 
-  localStorage.setItem(
-    "snapledger_payer",
-    JSON.stringify(Array.from(kp.secretKey)),
-  );
+    if (saved) {
+      try {
+        const secretKey = JSON.parse(saved);
+        if (Array.isArray(secretKey) && secretKey.length === 64) {
+          return Keypair.fromSecretKey(Uint8Array.from(secretKey));
+        }
+      } catch {
+        localStorage.removeItem("snapledger_payer");
+      }
+    }
 
-  console.log("Wallet (save this):", kp.publicKey.toBase58());
+    const kp = Keypair.generate();
+    localStorage.setItem(
+      "snapledger_payer",
+      JSON.stringify(Array.from(kp.secretKey)),
+    );
+    return kp;
+  }
 
-  return kp;
+  // 3. Fallback for server-side without ENV (not ideal for persistence)
+  console.warn("Generating ephemeral Keypair for server-side operation.");
+  return Keypair.generate();
 }
 
 // ✅ NO faucet logic here
